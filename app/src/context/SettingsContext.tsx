@@ -36,7 +36,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             const loaded = await readPersistedSettings(DEFAULT_SETTINGS, undefined, () => {
                 loadFailed = true;
             });
-            if (loaded.proxyPassword) {
+            if (loaded.proxyPassword && typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
                 try {
                     await invoke('cmd_migrate_proxy_secret', { password: loaded.proxyPassword });
                     markProxySecretMigrated();

@@ -12,7 +12,32 @@ export interface SettingsStore {
 
 type StoreLoader = () => Promise<SettingsStore>;
 
-const loadSettingsStore: StoreLoader = () => load(SETTINGS_FILE);
+const browserStore: SettingsStore = {
+  async get<T>(key: string): Promise<T | null | undefined> {
+    try {
+      if (typeof window === 'undefined') return null;
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+  async set(key: string, value: unknown): Promise<void> {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(key, JSON.stringify(value));
+      }
+    } catch {}
+  },
+  async save(): Promise<void> {}
+};
+
+const loadSettingsStore: StoreLoader = async () => {
+  if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+    return browserStore;
+  }
+  return load(SETTINGS_FILE);
+};
 
 // A legacy password is retained only until the Rust backend confirms that it
 // was migrated into secure credential storage. New passwords are never written

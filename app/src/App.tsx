@@ -123,6 +123,10 @@ function AppContent() {
   // useTelegramConnection (inside Dashboard) no longer calls cmd_connect on mount.
   useEffect(() => {
     const checkSession = async () => {
+      if (typeof window !== 'undefined' && !('__TAURI_INTERNALS__' in window)) {
+        setAuthStatus("unauthenticated");
+        return;
+      }
       try {
         setStartupProgress({ label: "Checking local services", detail: "Verifying the database and streaming runtime…", percent: 18 });
         await invoke("cmd_get_startup_health");
@@ -264,7 +268,7 @@ function AppContent() {
       />
       <Toaster theme={theme} position="bottom-center" />
       <TelegramCooldownBanner />
-      {persistenceStatus === 'error' && (
+      {persistenceStatus === 'error' && typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window) && (
         <div className="fixed inset-x-4 top-4 z-[400] mx-auto flex max-w-xl items-center justify-between gap-3 rounded-lg border border-app-danger/30 bg-app-surface-raised px-4 py-3 text-sm text-app-text shadow-xl" role="alert">
           <span>{t('common.operation_failed')}</span>
           <button type="button" onClick={() => void retryPersistence().catch(() => undefined)} className="quiet-control shrink-0 bg-app-accent px-3 py-1.5 font-medium text-app-accent-contrast">
