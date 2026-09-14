@@ -94,7 +94,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
     const [activeProfile, setActiveProfile] = useState<string | null>(null);
 
     useEffect(() => {
-        if (store) {
+        if (store && typeof store.get === 'function') {
             const loadProfiles = async () => {
                 const savedProfiles = await store.get<any[]>('profiles') || [];
                 const savedActive = await store.get<string>('active_profile');
