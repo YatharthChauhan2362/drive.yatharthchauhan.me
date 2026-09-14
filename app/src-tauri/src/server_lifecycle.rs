@@ -134,6 +134,7 @@ impl LocalServerLifecycle {
 }
 
 #[cfg(any(test, not(target_os = "android")))]
+#[allow(dead_code)]
 pub async fn bind_loopback_with_retry(
     port: u16,
     lifecycle: &LocalServerLifecycle,
@@ -146,7 +147,33 @@ pub async fn bind_loopback_with_retry(
 }
 
 #[cfg(any(test, not(target_os = "android")))]
+pub async fn bind_lan_with_retry(
+    port: u16,
+    lifecycle: &LocalServerLifecycle,
+    generation: u64,
+) -> Result<Option<TcpListener>, io::Error> {
+    bind_address_with_delays(Ipv4Addr::UNSPECIFIED, port, &BIND_RETRY_DELAYS, || {
+        lifecycle.is_current(generation)
+    })
+    .await
+}
+
+#[cfg(any(test, not(target_os = "android")))]
+#[allow(dead_code)]
 async fn bind_loopback_with_delays<F>(
+    port: u16,
+    retry_delays: &[Duration],
+    should_continue: F,
+) -> Result<Option<TcpListener>, io::Error>
+where
+    F: FnMut() -> bool,
+{
+    bind_address_with_delays(Ipv4Addr::LOCALHOST, port, retry_delays, should_continue).await
+}
+
+#[cfg(any(test, not(target_os = "android")))]
+async fn bind_address_with_delays<F>(
+    addr: Ipv4Addr,
     port: u16,
     retry_delays: &[Duration],
     mut should_continue: F,
@@ -154,7 +181,7 @@ async fn bind_loopback_with_delays<F>(
 where
     F: FnMut() -> bool,
 {
-    let address = (Ipv4Addr::LOCALHOST, port);
+    let address = (addr, port);
     let mut attempt = 0usize;
     loop {
         if !should_continue() {

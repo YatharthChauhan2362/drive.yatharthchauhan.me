@@ -1322,6 +1322,7 @@ mod streaming_runtime_tests {
             peer_cache: Arc::new(RwLock::new(HashMap::new())),
             active_file_loads: Arc::new(RwLock::new(HashMap::new())),
             cancelled_transfers: Arc::new(RwLock::new(HashSet::new())),
+            current_profile: Arc::new(Mutex::new(None)),
         })
     }
 

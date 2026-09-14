@@ -195,7 +195,7 @@ pub async fn restart_api_server(app: &tauri::AppHandle) -> Result<(), String> {
             let api_db = actix_web::web::Data::new(db_pool);
 
             log::info!("Starting REST API server on port {}", api_port);
-            let listener = match server_lifecycle::bind_loopback_with_retry(
+            let listener = match server_lifecycle::bind_lan_with_retry(
                 api_port,
                 &lifecycle_for_thread,
                 generation,
@@ -374,8 +374,8 @@ pub async fn restart_webdav_server(app: &tauri::AppHandle) -> Result<(), String>
             let handler = actix_web::web::Data::new(handler);
             let auth = actix_web::web::Data::new(auth);
 
-            log::info!("Starting WebDAV server on 127.0.0.1:{port}");
-            let listener = match server_lifecycle::bind_loopback_with_retry(
+            log::info!("Starting WebDAV server on 0.0.0.0:{port}");
+            let listener = match server_lifecycle::bind_lan_with_retry(
                 port,
                 &lifecycle_for_thread,
                 generation,

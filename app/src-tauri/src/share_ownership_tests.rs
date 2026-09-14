@@ -55,6 +55,7 @@ fn disconnected() -> Arc<TelegramState> {
         peer_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         active_file_loads: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         cancelled_transfers: Arc::new(tokio::sync::RwLock::new(std::collections::HashSet::new())),
+        current_profile: Arc::new(tokio::sync::Mutex::new(None)),
     })
 }
 
