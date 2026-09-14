@@ -40,17 +40,90 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
 
     if (isBrowser) {
         return (
-            <div className="auth-gradient flex h-full items-center justify-center p-6 text-center text-app-text">
-              <div className="quiet-raised max-w-md p-6">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-container bg-app-danger/10">
-                    <ShieldCheck className="h-6 w-6 text-app-danger" />
+            <div className="auth-gradient flex min-h-screen w-full flex-col items-center justify-center p-6 text-center text-app-text">
+              <AuthThemeToggle />
+              <div className="quiet-raised w-full max-w-xl p-8 rounded-2xl border border-app-border bg-app-surface-raised/90 backdrop-blur-xl shadow-2xl">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-app-accent/15 text-app-accent border border-app-accent/30 shadow-lg">
+                    <ShieldCheck className="h-8 w-8 text-app-accent" />
                 </div>
-                <h1 className="text-app-title font-semibold text-app-text">{t('auth.desktop_required')}</h1>
-                <p className="mx-auto mt-2 max-w-sm text-ui leading-relaxed text-app-text-secondary">
-                    {t('auth.desktop_required_desc')}
+                <h1 className="text-2xl font-bold tracking-tight text-app-text">Telegram Drive Cloud</h1>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-text-secondary">
+                    Your unlimited, private cloud storage powered by Telegram MTProto. Access files seamlessly across desktop, WebDAV, and mobile devices.
                 </p>
-                <div className="mt-5 rounded-control border border-app-border bg-app-surface-sunken/40 p-3 text-metadata text-app-text-secondary">
-                    {t('auth.open_window_prompt')}
+
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-start">
+                  <a
+                    href="https://github.com/YatharthChauhan2362/drive.yatharthchauhan.me/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3.5 rounded-xl border border-app-border bg-app-surface-sunken/50 hover:bg-app-surface-hover transition group"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-app-surface border border-app-border-subtle group-hover:border-app-accent/40">
+                      <ExternalLink className="h-5 w-5 text-app-accent" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-app-text flex items-center gap-1">
+                        Desktop App <ExternalLink className="h-3 w-3 opacity-60" />
+                      </div>
+                      <div className="text-xs text-app-text-secondary">macOS, Windows, Linux</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="https://github.com/YatharthChauhan2362/drive.yatharthchauhan.me/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3.5 rounded-xl border border-app-border bg-app-surface-sunken/50 hover:bg-app-surface-hover transition group"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-app-surface border border-app-border-subtle group-hover:border-app-accent/40">
+                      <ExternalLink className="h-5 w-5 text-emerald-500" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-app-text flex items-center gap-1">
+                        Android App <ExternalLink className="h-3 w-3 opacity-60" />
+                      </div>
+                      <div className="text-xs text-app-text-secondary">Direct APK package</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="https://github.com/YatharthChauhan2362/drive.yatharthchauhan.me/blob/main/WEBDAV_GUIDE.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3.5 rounded-xl border border-app-border bg-app-surface-sunken/50 hover:bg-app-surface-hover transition group"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-app-surface border border-app-border-subtle group-hover:border-app-accent/40">
+                      <ExternalLink className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-app-text flex items-center gap-1">
+                        WebDAV Setup <ExternalLink className="h-3 w-3 opacity-60" />
+                      </div>
+                      <div className="text-xs text-app-text-secondary">iOS, Android, Infuse & Finder</div>
+                    </div>
+                  </a>
+
+                  <a
+                    href="https://github.com/YatharthChauhan2362/drive.yatharthchauhan.me"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3.5 rounded-xl border border-app-border bg-app-surface-sunken/50 hover:bg-app-surface-hover transition group"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-app-surface border border-app-border-subtle group-hover:border-app-accent/40">
+                      <ExternalLink className="h-5 w-5 text-app-text" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-app-text flex items-center gap-1">
+                        GitHub Source <ExternalLink className="h-3 w-3 opacity-60" />
+                      </div>
+                      <div className="text-xs text-app-text-secondary">drive.yatharthchauhan.me</div>
+                    </div>
+                  </a>
+                </div>
+
+                <div className="mt-6 rounded-xl border border-app-border bg-app-surface-sunken/40 p-3.5 text-xs text-app-text-secondary flex items-center justify-between">
+                  <span>Cloud Status: <strong className="text-emerald-500 font-medium">Online (Render)</strong></span>
+                  <a href="/health" target="_blank" className="hover:text-app-text underline">Health Check</a>
                 </div>
               </div>
             </div>
