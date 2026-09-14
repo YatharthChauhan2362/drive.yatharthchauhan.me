@@ -45,13 +45,61 @@ pub fn resume() {
     SIGNING_OUT.store(false, Ordering::SeqCst);
 }
 
+static ACTIVE_PROFILE: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+pub fn set_active_profile(profile: Option<String>) {
+    if let Ok(mut guard) = ACTIVE_PROFILE.write() {
+        *guard = profile;
+    }
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+
+pub fn active_session_path(root: &Path) -> PathBuf {
+    // 1. Check in-memory active profile
+    if let Ok(guard) = ACTIVE_PROFILE.read() {
+        if let Some(ref profile) = *guard {
+            if !profile.trim().is_empty() {
+                let filename = format!(
+                    "telegram_{}.session",
+                    profile.replace(|c: char| !c.is_alphanumeric(), "_")
+                );
+                let path = root.join(&filename);
+                if path.is_file() {
+                    return path;
+                }
+            }
+        }
+    }
+
+    // 2. Check config.json on disk
+    if let Ok(content) = std::fs::read_to_string(root.join("config.json")) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(profile) = val.get("active_profile").and_then(|v| v.as_str()) {
+                if !profile.trim().is_empty() {
+                    let filename = format!(
+                        "telegram_{}.session",
+                        profile.replace(|c: char| !c.is_alphanumeric(), "_")
+                    );
+                    let path = root.join(&filename);
+                    if path.is_file() {
+                        return path;
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback to default session
+    root.join("telegram.session")
+}
+
 /// The saved session's authenticated self peer is available offline. Never
 /// infer ownership from a folder number, API ID, or an unscoped legacy cache.
 pub fn current_owner(root: &Path) -> Result<i64, String> {
     if SIGNING_OUT.load(Ordering::SeqCst) {
         return Err("ACCOUNT_CHANGED: Sign in again to open this workspace".into());
     }
-    let path = root.join("telegram.session");
+    let path = active_session_path(root);
     if !path.is_file() {
         return Err("ACCOUNT_REQUIRED: Sign in to open your workspace".into());
     }

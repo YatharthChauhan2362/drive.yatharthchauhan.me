@@ -40,11 +40,8 @@ import { consumeWhatsNew, type WhatsNewDetails } from "./services/updateReliabil
 import { useTvSpatialNavigation } from "./hooks/useTvSpatialNavigation";
 import { ensureLanguageResource } from "./i18n";
 import { useSupporter } from "./context/SupporterContext";
-import { shouldShowSponsorContent } from "./services/supporterVisibility";
 
 type AuthStatus = "loading" | "authenticated" | "unauthenticated" | "sponsor-check" | "ad-gateway";
-
-const AD_GATEWAY_PASSED_KEY = "ad_gateway_passed";
 
 interface StartupProgress {
   label: string;
@@ -157,9 +154,10 @@ function AppContent() {
           return;
         }
 
-        // Initialize the client with the saved API ID
+        // Initialize the client with the saved API ID and active profile
         setStartupProgress({ label: "Starting Telegram", detail: "Initializing the secure desktop client…", percent: 58 });
-        await invoke("cmd_connect", { apiId });
+        const activeProfile = await store.get<string>("active_profile");
+        await invoke("cmd_connect", { apiId, profile: activeProfile || null });
 
         // Verify the session is still valid with Telegram servers
         setStartupProgress({ label: "Checking your account", detail: "Confirming the session with Telegram…", percent: 82 });
@@ -195,18 +193,7 @@ function AppContent() {
 
     let cancelled = false;
     const finishSponsorCheck = async () => {
-      if (!shouldShowSponsorContent(supporterStatus)) {
-        if (!cancelled) setAuthStatus("authenticated");
-        return;
-      }
-
-      try {
-        const store = await load("config.json");
-        const gatewayPassed = await store.get<boolean>(AD_GATEWAY_PASSED_KEY);
-        if (!cancelled) setAuthStatus(gatewayPassed ? "authenticated" : "ad-gateway");
-      } catch {
-        if (!cancelled) setAuthStatus("ad-gateway");
-      }
+      if (!cancelled) setAuthStatus("authenticated");
     };
 
     void finishSponsorCheck();

@@ -1151,10 +1151,7 @@ pub async fn start_server(
 }
 
 fn bind_stream_listener(port: u16) -> std::io::Result<TcpListener> {
-    // Bind the listener to 127.0.0.1 explicitly. The streaming server is only
-    // accessed from the local frontend; exposing it on all interfaces is both
-    // unnecessary and liable to trigger desktop firewall prompts.
-    let ipv4_addr = format!("127.0.0.1:{port}");
+    let ipv4_addr = format!("0.0.0.0:{port}");
     match TcpListener::bind(&ipv4_addr) {
         Ok(listener) => {
             log::info!("Streaming Server listening on {} (IPv4)", ipv4_addr);

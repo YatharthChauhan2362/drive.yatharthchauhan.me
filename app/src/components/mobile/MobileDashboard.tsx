@@ -175,7 +175,8 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
   const {
     store, folders, activeFolderId, setActiveFolderId, isSyncing, isConnected,
     handleLogout, handleSyncFolders, handleCreateFolder, handleFolderDelete,
-    handleFolderRename, handleFolderToggleVisibility, handleExportFolderInvite
+    handleFolderRename, handleFolderToggleVisibility, handleExportFolderInvite,
+    accountId
   } = useTelegramConnection(logoutHandler);
 
   const { data: androidTransferEnvironment } = useQuery({
@@ -562,7 +563,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [fileRenames, setFileRenames] = useState<Map<number, string>>(new Map());
-  const { handleDelete: handleDeleteOp, handleBulkDelete, handleBulkDownload, handleBulkMove } = useFileOperations(activeFolderId, selectedIds, setSelectedIds, allFiles, queueBulkDownload);
+  const { handleDelete: handleDeleteOp, handleBulkDelete, handleBulkDownload, handleBulkMove } = useFileOperations(activeFolderId, selectedIds, setSelectedIds, allFiles, queueBulkDownload, accountId);
 
   const activeFolder = activeFolderId === null
     ? 'Saved Messages'

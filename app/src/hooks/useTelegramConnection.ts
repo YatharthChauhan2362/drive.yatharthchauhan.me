@@ -18,6 +18,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
 
     const [folders, setFolders] = useState<TelegramFolder[]>([]);
     const [groups, setGroups] = useState<FolderGroup[]>([]);
+    const [profiles, setProfiles] = useState<any[]>([]);
+    const [activeProfile, setActiveProfile] = useState<string | null>(null);
     const [activeFolderId, setActiveFolderId] = useState<number | null>(null);
     const [store, setStore] = useState<Store | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -100,6 +102,11 @@ export function useTelegramConnection(onLogoutParent: () => void) {
                 } catch (e) {
                     console.error("Failed to load groups:", e);
                 }
+
+                const savedProfiles = await _store.get<any[]>('profiles') || [];
+                const savedActive = await _store.get<string>('active_profile');
+                setProfiles(savedProfiles);
+                setActiveProfile(savedActive || null);
 
                 const savedActiveFolderId = await _store.get<number | null>('activeFolderId');
                 if (savedActiveFolderId !== undefined) setActiveFolderId(savedActiveFolderId);
@@ -418,8 +425,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         if (!store) return;
         setIsSyncing(true);
         try {
-            const profiles = await store.get<any[]>('profiles') || [];
-            const profile = profiles.find(p => p.name === profileName);
+            const currentProfiles = await store.get<any[]>('profiles') || [];
+            const profile = currentProfiles.find(p => p.name === profileName);
             if (!profile) throw new Error("Profile not found");
 
             // 1. Connect to new profile
@@ -435,7 +442,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
             await store.set('folders', []);
             await store.save();
             
-            // 3. Reset state
+            // 3. Reset state & immediately reflect active profile in UI
+            setActiveProfile(profileName);
             setActiveFolderId(null);
             queryClient.clear();
             
@@ -445,6 +453,12 @@ export function useTelegramConnection(onLogoutParent: () => void) {
             const connected = await invoke<boolean>("cmd_check_connection");
             setIsConnected(connected);
             if (connected) {
+                try {
+                    const newAccountId = await getCurrentAccountId();
+                    setAccountId(newAccountId);
+                } catch {
+                    // ignore
+                }
                 handleSyncFolders();
             }
         } catch (e) {
@@ -457,9 +471,10 @@ export function useTelegramConnection(onLogoutParent: () => void) {
     const handleDeleteProfile = async (profileName: string) => {
         if (!store) return;
         try {
-            const profiles = await store.get<any[]>('profiles') || [];
-            const updatedProfiles = profiles.filter(p => p.name !== profileName);
+            const currentProfiles = await store.get<any[]>('profiles') || [];
+            const updatedProfiles = currentProfiles.filter(p => p.name !== profileName);
             await store.set('profiles', updatedProfiles);
+            setProfiles(updatedProfiles);
             
             const active = await store.get<string>('active_profile');
             if (active === profileName) {
@@ -468,6 +483,7 @@ export function useTelegramConnection(onLogoutParent: () => void) {
                 } else {
                     await store.set('active_profile', null);
                     await store.save();
+                    setActiveProfile(null);
                     handleLogout();
                 }
             } else {
@@ -484,6 +500,10 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         accountId,
         folders,
         groups,
+        profiles,
+        activeProfile,
+        setProfiles,
+        setActiveProfile,
         activeFolderId,
         setActiveFolderId: handleSetActiveFolderId,
         isSyncing,

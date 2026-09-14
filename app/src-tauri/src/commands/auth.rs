@@ -249,9 +249,8 @@ pub async fn cmd_connect(
     }
     // Store API ID and Profile for auto-reconnect
     *state.api_id.lock().await = Some(api_id);
-    if profile.is_some() {
-        *state.current_profile.lock().await = profile;
-    }
+    *state.current_profile.lock().await = profile.clone();
+    crate::workspace::set_active_profile(profile);
     ensure_client_initialized(&app_handle, &state, api_id).await?;
     Ok(true)
 }
@@ -395,6 +394,7 @@ pub async fn cmd_logout(
     let _ = std::fs::remove_file(app_data_dir.join(format!("{}-wal", session_filename)));
     let _ = std::fs::remove_file(app_data_dir.join(format!("{}-shm", session_filename)));
 
+    crate::workspace::set_active_profile(None);
     log::info!(
         "Logout complete. Vault locked. Runner count: {}",
         state.runner_count.load(Ordering::SeqCst)

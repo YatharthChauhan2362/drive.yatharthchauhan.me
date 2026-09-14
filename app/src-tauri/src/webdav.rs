@@ -1298,29 +1298,97 @@ pub fn build_handler(fs: TelegramDavFs, token_hash: String) -> (DavHandler, WebD
     (handler, WebDavAuth { token_hash })
 }
 
+fn extract_basic_auth_token(auth_header: &str, token_hash: &str) -> Option<bool> {
+    let stripped = auth_header.strip_prefix("Basic ")?.trim();
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD.decode(stripped).ok()?;
+    let text = String::from_utf8(decoded).ok()?;
+    let (user, pass) = text.split_once(':').unwrap_or((&text, ""));
+    if (!pass.is_empty() && crate::commands::webdav_settings::verify_token(pass, token_hash))
+        || (!user.is_empty() && crate::commands::webdav_settings::verify_token(user, token_hash))
+    {
+        return Some(true);
+    }
+    Some(false)
+}
+
 pub async fn webdav_handler(
     request: DavRequest,
     handler: web::Data<DavHandler>,
     auth: web::Data<WebDavAuth>,
 ) -> Either<DavResponse, HttpResponse> {
     let original_path = request.request.uri().path().to_string();
-    let Some((token, _relative_path)) = split_authenticated_path(&original_path) else {
-        return Either::Right(HttpResponse::NotFound().finish());
-    };
-    if !crate::commands::webdav_settings::verify_token(token, &auth.token_hash) {
-        return Either::Right(HttpResponse::NotFound().finish());
+
+    // Allow root OPTIONS preflight for WebDAV clients (e.g. mobile apps verifying DAV capability)
+    if request.request.method() == "OPTIONS"
+        && (original_path == "/" || original_path.is_empty())
+    {
+        return Either::Right(
+            HttpResponse::Ok()
+                .insert_header(("DAV", "1,2,3,sabredav-partialupdate"))
+                .insert_header(("MS-Author-Via", "DAV"))
+                .insert_header((
+                    "Allow",
+                    "OPTIONS, GET, HEAD, POST, PUT, DELETE, TRACE, PROPFIND, PROPPATCH, MKCOL, COPY, MOVE, LOCK, UNLOCK",
+                ))
+                .finish(),
+        );
     }
+
+    // Authenticate via URL path (/dav/<token>/...) OR via HTTP Basic Auth
+    let (token_in_path, config) = if let Some((token, _relative_path)) = split_authenticated_path(&original_path) {
+        if !crate::commands::webdav_settings::verify_token(token, &auth.token_hash) {
+            return Either::Right(HttpResponse::NotFound().finish());
+        }
+        let prefix = format!("/dav/{token}");
+        (true, DavHandler::builder().strip_prefix(prefix))
+    } else {
+        let has_basic_auth = request
+            .request
+            .headers()
+            .get("authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|h| extract_basic_auth_token(h, &auth.token_hash));
+
+        match has_basic_auth {
+            Some(true) => {
+                let strip = if original_path.starts_with("/dav") {
+                    DavHandler::builder().strip_prefix("/dav")
+                } else {
+                    DavHandler::builder()
+                };
+                (false, strip)
+            }
+            Some(false) => {
+                return Either::Right(
+                    HttpResponse::Unauthorized()
+                        .insert_header(("WWW-Authenticate", "Basic realm=\"Telegram Drive WebDAV\""))
+                        .finish(),
+                );
+            }
+            None => {
+                return Either::Right(
+                    HttpResponse::Unauthorized()
+                        .insert_header(("WWW-Authenticate", "Basic realm=\"Telegram Drive WebDAV\""))
+                        .finish(),
+                );
+            }
+        }
+    };
 
     if let Some(destination) = request.request.headers().get("destination") {
         if let Ok(destination) = destination.to_str() {
             if let Some(path_start) = destination_path(destination) {
-                let valid_destination =
+                let valid_destination = if token_in_path {
                     split_authenticated_path(path_start).is_some_and(|(destination_token, _)| {
                         crate::commands::webdav_settings::verify_token(
                             destination_token,
                             &auth.token_hash,
                         )
-                    });
+                    })
+                } else {
+                    true
+                };
                 if !valid_destination {
                     return Either::Right(HttpResponse::NotFound().finish());
                 }
@@ -1335,8 +1403,6 @@ pub async fn webdav_handler(
     // Keep the authenticated prefix in the request and let dav-server strip it.
     // This makes every href in PROPFIND/LOCK responses include /dav/<token>/,
     // which Finder and Explorer require when following child resources.
-    let prefix = format!("/dav/{token}");
-    let config = DavHandler::builder().strip_prefix(prefix);
     Either::Left(handler.handle_with(config, request.request).await.into())
 }
 

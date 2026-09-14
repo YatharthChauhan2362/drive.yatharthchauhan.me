@@ -10,7 +10,6 @@ import { isAndroidPlatform, showFileDialogFallback, pickWithFallback } from '../
 import { useSettings } from '../context/SettingsContext';
 import type { Store } from '@tauri-apps/plugin-store';
 import { useTranslation } from 'react-i18next';
-import { useUploadChoice, type UploadChoice } from '../context/UploadChoiceContext';
 import { triggerHaptic } from '../services/feedback';
 import { isTransientNetworkError, restoreUploadQueue, serializeUploadQueue } from '../services/transferQueuePolicy';
 import { announceSupporterValueMoment } from '../services/supporterVisibility';
@@ -64,7 +63,6 @@ export function useFileUpload(
     const runningItemsRef = useRef(new Map<string, () => boolean>());
     const queryClient = useQueryClient();
     const { settings } = useSettings();
-    const { chooseUploadProtection } = useUploadChoice();
     const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]);
     const [initialized, setInitialized] = useState(false);
     const initializingRef = useRef(false);
@@ -360,10 +358,9 @@ export function useFileUpload(
         if (!ownsItem(item)) return;
         runningItemsRef.current.set(item.id, isCurrent);
         let keepTemporaryFileForResume = false;
-        const protection: UploadProtectionIntent = item.protection ?? {
-            mode: settings.encryptionDefaultMode,
-            protectMetadata: settings.encryptionProtectMetadata,
-        };
+        const protection: UploadProtectionIntent = (item.protection?.mode === 'vault' || !item.protection)
+            ? { mode: 'standard', protectMetadata: false }
+            : item.protection;
         if (
             (protection.mode === 'passphrase' || protection.mode === 'vault_and_passphrase')
             && !protection.promptToken
@@ -522,16 +519,7 @@ export function useFileUpload(
 
     const chooseAndStageProtection = async (count: number): Promise<UploadProtectionIntent[] | null> => {
         requireCurrent();
-        const choice: UploadChoice | null = await chooseUploadProtection(count);
-        requireCurrent();
-        if (!choice) return null;
-        if (choice === 'store') {
-            return stageProtectionForFiles(count, 'standard');
-        }
-        const protectedMode = settings.encryptionDefaultMode === 'standard'
-            ? 'vault'
-            : settings.encryptionDefaultMode;
-        return stageProtectionForFiles(count, protectedMode);
+        return stageProtectionForFiles(count, 'standard');
     };
 
     /** Queues a set of file paths with an explicit, non-secret protection intent. */
@@ -818,6 +806,8 @@ export function useFileUpload(
             requireCurrent();
             if (!staged) return;
             protection = { ...staged[0], protectMetadata: protection.protectMetadata };
+        } else if (item.status === 'waiting_for_unlock' || protection?.mode === 'vault') {
+            protection = { mode: 'standard', protectMetadata: false };
         }
         if (!isAndroidPlatform) {
             if (protection?.promptToken) {

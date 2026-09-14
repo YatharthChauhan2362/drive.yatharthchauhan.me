@@ -145,7 +145,7 @@ export function TopBar({
             {hasSelection ? (
                 <div className="flex flex-1 items-center gap-2">
                     <span className="text-ui font-medium text-app-text-secondary">
-                        {t('files.selected', { count: selectedIds.length })}
+                        {t('files.items_selected', { count: selectedIds.length })}
                     </span>
                     <Button size="sm" variant="ghost" onClick={onClearSelection} leadingIcon={<X className="h-3.5 w-3.5" />}>
                         {t('common.cancel')}

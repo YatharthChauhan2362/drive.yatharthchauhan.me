@@ -9,7 +9,7 @@ pub(crate) mod remote_changes;
 pub mod storage;
 pub mod store;
 use crate::{commands::TelegramState, models::FileMetadata};
-pub use account::{current_owner, resume, suspend, AccountGuard};
+pub use account::{active_session_path, current_owner, resume, set_active_profile, suspend, AccountGuard};
 pub(crate) use account::{operation_account, with_operation_account};
 use grammers_client::types::Peer;
 use serde::Deserialize;

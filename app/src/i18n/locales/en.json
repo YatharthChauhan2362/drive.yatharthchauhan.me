@@ -445,6 +445,7 @@
         "copy_link": "Copy Invite Link",
         "make_public": "Make Public",
         "make_private": "Make Private",
+        "selected": "{{count}} selected",
         "items_selected": "{{count}} items selected",
         "select_all": "Select All",
         "clear_selection": "Clear",

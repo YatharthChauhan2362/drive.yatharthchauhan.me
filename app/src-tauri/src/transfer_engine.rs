@@ -239,7 +239,18 @@ impl TransferStore {
             .map_err(|error| format!("Could not initialize transfer database: {error}"))?;
         let mut jobs = Self::load_all_from(&connection)?;
         for job in &mut jobs {
-            if recover_after_restart(job) {
+            if job.status == TransferStatus::WaitingForUnlock
+                && (job.protection_mode.as_deref() == Some("vault")
+                    || job.error.as_deref().unwrap_or("").contains("VAULT_LOCKED"))
+            {
+                job.status = TransferStatus::Pending;
+                job.protection_mode = Some("standard".to_string());
+                job.error = None;
+                job.error_category = None;
+                job.revision = job.revision.saturating_add(1);
+                job.updated_at = now_millis();
+                Self::upsert_on(&connection, job)?;
+            } else if recover_after_restart(job) {
                 Self::upsert_on(&connection, job)?;
             }
         }
@@ -815,11 +826,19 @@ impl TransferEngine {
             Err(error) => Err(error),
             Ok(_) => match job.kind {
                 TransferKind::LocalUpload => {
+                    let effective_mode = if (job.protection_mode.as_deref() == Some("vault")
+                        || job.protection_mode.is_none())
+                        && self.app.state::<CryptoState>().is_locked()
+                    {
+                        Some("standard".to_string())
+                    } else {
+                        job.protection_mode.clone()
+                    };
                     commands::cmd_upload_file(
                         job.path.clone().unwrap_or_default(),
                         job.folder_id,
                         Some(job.id.clone()),
-                        job.protection_mode.clone(),
+                        effective_mode,
                         prompt_token,
                         job.protect_metadata,
                         job.video_upload_mode.clone(),
@@ -834,11 +853,19 @@ impl TransferEngine {
                     .await
                 }
                 TransferKind::UrlUpload => {
+                    let effective_mode = if (job.protection_mode.as_deref() == Some("vault")
+                        || job.protection_mode.is_none())
+                        && self.app.state::<CryptoState>().is_locked()
+                    {
+                        Some("standard".to_string())
+                    } else {
+                        job.protection_mode.clone()
+                    };
                     commands::cmd_upload_from_url(
                         job.url.clone().unwrap_or_default(),
                         job.folder_id,
                         job.id.clone(),
-                        job.protection_mode.clone(),
+                        effective_mode,
                         prompt_token,
                         job.protect_metadata,
                         job.video_upload_mode.clone(),
@@ -1101,6 +1128,11 @@ impl TransferEngine {
                 job.status = TransferStatus::Pending;
                 job.progress = 0;
                 job.transferred_bytes = 0;
+                if job.status == TransferStatus::WaitingForUnlock
+                    || job.protection_mode.as_deref() == Some("vault")
+                {
+                    job.protection_mode = Some("standard".to_string());
+                }
             }
             _ => return Ok(job),
         }

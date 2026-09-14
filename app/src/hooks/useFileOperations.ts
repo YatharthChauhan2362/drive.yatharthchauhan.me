@@ -57,13 +57,22 @@ export function useFileOperations(
     const handleBulkDelete = useCallback(async () => {
         const isCurrent = capture();
         if (!ownerId || !isCurrent()) return;
-        const ids = [...selectedIdsRef.current];
+        const ids = [...new Set(selectedIdsRef.current)];
         if (ids.length === 0) return;
-        const targets = ids.map(id => displayedFilesRef.current.find(file => file.id === id))
-            .filter((file): file is TelegramFile => Boolean(file))
-            .map(file => ({ id: file.id, folderId: sourceFolder(file, activeFolderId) }));
-        if (targets.length !== ids.length) { toast.error(t('common.operation_failed')); return; }
-        if (!await confirm({ title: "Delete Files", message: `Are you sure you want to delete ${ids.length} files?`, confirmText: "Delete All", variant: 'danger' }) || !isCurrent()) return;
+        const targets = ids.map(id => {
+            const file = displayedFilesRef.current.find(candidate => candidate.id === id);
+            return {
+                id,
+                folderId: file ? sourceFolder(file, activeFolderId) : activeFolderId,
+            };
+        });
+        if (targets.length === 0) return;
+        if (!await confirm({
+            title: "Delete Files",
+            message: `Are you sure you want to delete ${targets.length} ${targets.length === 1 ? 'file' : 'files'}?`,
+            confirmText: "Delete All",
+            variant: 'danger',
+        }) || !isCurrent()) return;
         let success = 0;
         let fail = 0;
         const deletedByFolder = new Map<number | null, number[]>();
@@ -74,7 +83,8 @@ export function useFileOperations(
                 if (!isCurrent()) return;
                 success++;
                 deletedByFolder.set(target.folderId, [...(deletedByFolder.get(target.folderId) ?? []), target.id]);
-            } catch {
+            } catch (error) {
+                console.error(`Failed to delete file ${target.id}:`, error);
                 if (!isCurrent()) return;
                 fail++;
             }
@@ -85,8 +95,8 @@ export function useFileOperations(
             updateFileQueryData(queryClient, folderId, new Set(deletedIds), () => null, ownerId);
         }
         void invalidateOwnedFileQueries(queryClient, ownerId);
-        if (success > 0) toast.success(`Deleted ${success} files.`);
-        if (fail > 0) toast.error(`Failed to delete ${fail} files.`);
+        if (success > 0) toast.success(`Deleted ${success} ${success === 1 ? 'file' : 'files'}.`);
+        if (fail > 0) toast.error(`Failed to delete ${fail} ${fail === 1 ? 'file' : 'files'}.`);
     }, [activeFolderId, capture, confirm, ownerId, queryClient, setSelectedIds, t]);
 
     const handleRenameFile = useCallback(async (file: TelegramFile, newName: string) => {

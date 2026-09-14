@@ -87,23 +87,9 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         handleCreateGroup, handleDeleteGroup, handleUpdateGroup, handleAssignFolderToGroup,
         handleReorderFolders, handleUpdateGroupOrder,
         handleSwitchProfile, handleDeleteProfile,
+        profiles, activeProfile,
         accountId,
     } = useTelegramConnection(onLogout);
-
-    const [profiles, setProfiles] = useState<any[]>([]);
-    const [activeProfile, setActiveProfile] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (store && typeof store.get === 'function') {
-            const loadProfiles = async () => {
-                const savedProfiles = await store.get<any[]>('profiles') || [];
-                const savedActive = await store.get<string>('active_profile');
-                setProfiles(savedProfiles);
-                setActiveProfile(savedActive || null);
-            };
-            loadProfiles();
-        }
-    }, [store, accountId]);
 
 
     const { settings, updateSetting, updateSettings, isLoaded: settingsLoaded } = useSettings();
@@ -183,7 +169,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
     const [renameRequest, setRenameRequest] = useState<{ ownerId: string; file: TelegramFile } | null>(null);
     const renameFileTarget = renameRequest?.ownerId === accountId ? renameRequest.file : null;
     const moveFileTarget = showMoveModal && moveRequest?.files.length === 1 ? moveRequest.files[0] : null;
-    useEffect(() => { setSelectedIds([]); setMoveRequest(null); setRenameRequest(null); setInternalDrag(null); }, [accountId]);
+    useEffect(() => { setSelectedIds([]); setMoveRequest(null); setRenameRequest(null); setInternalDrag(null); }, [accountId, activeFolderId, activeSmartView]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1037,11 +1023,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
             )}
 
             <DesktopAdBanner
-                suppressed={
-                    uploadQueue.some(item => ['pending', 'uploading', 'downloading', 'encrypting', 'verifying'].includes(item.status))
-                    || downloadQueue.some(item => ['pending', 'cooldown', 'downloading', 'decrypting', 'verifying'].includes(item.status))
-                    || Boolean(previewFile || playingFile || pdfFile || archiveViewFile || showSettings || showMoveModal || shareFile || showRemoteUpload || showHelp || supporterOfferTrigger || !settings.driveTourSeen)
-                }
+                suppressed={true}
                 onSupport={() => { setSettingsInitialTab('privacy'); setShowSettings(true); }}
                 onManualDismiss={() => showSupporterOffer('ad_dismissed')}
             />
