@@ -39,6 +39,8 @@ interface FileExplorerProps {
     onRename?: (file: TelegramFile) => void;
     onFileMove?: (file: TelegramFile) => void;
     folders?: TelegramFolder[];
+    onFolderClick?: (folderId: number) => void;
+    onFolderDelete?: (folderId: number, folderName: string) => void;
     cardScale: number;
     sortField: SortField;
     sortDirection: SortDirection;
@@ -85,7 +87,7 @@ function useGridColumns(containerRef: React.RefObject<HTMLDivElement | null>) {
 export function FileExplorer({
     files, loading, error, viewMode, selectedIds, activeFolderId,
     onFileClick, onDelete, onDownload, onPreview, onManualUpload, onFolderUpload, showFolderUpload, onToggleSelection, onShare, onRename, onFileMove,
-    folders, cardScale, sortField, sortDirection, onSortChange, onToggleFavorite, onTogglePinned, syncProgress, selectionDisabled = false
+    folders, onFolderClick, onFolderDelete, cardScale, sortField, sortDirection, onSortChange, onToggleFavorite, onTogglePinned, syncProgress, selectionDisabled = false
 }: FileExplorerProps) {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: TelegramFile } | null>(null);
     const { t } = useTranslation();
@@ -102,7 +104,12 @@ export function FileExplorer({
     const columns = Math.min(desiredColumns, safeColumns);
 
     const cardWidth = (containerWidth - (GRID_GAP * (columns - 1))) / columns;
-    const cardHeight = Math.max(MIN_CARD_HEIGHT, cardWidth * 0.75); // 4:3 until the protected minimum
+    const cardHeight = Math.max(MIN_CARD_HEIGHT, cardWidth * 1); // 1:1 square aspect ratio
+
+    const subFolders = useMemo(() => {
+        if (!folders) return [];
+        return folders.filter(f => f.parent_id === activeFolderId);
+    }, [folders, activeFolderId]);
 
     const handleContextMenu = useCallback((e: React.MouseEvent, file: TelegramFile) => {
         e.preventDefault();
@@ -133,16 +140,26 @@ export function FileExplorer({
     }, [onPreview, sortedFiles]);
 
 
+    type GridItem =
+        | { kind: 'folder'; folder: TelegramFolder }
+        | { kind: 'file'; file: TelegramFile }
+        | { kind: 'upload' }
+        | { kind: 'upload-folder' };
+
     const gridRows = useMemo(() => {
-        const rows: (TelegramFile | 'upload' | 'upload-folder')[][] = [];
-        const tail: ('upload' | 'upload-folder')[] = ['upload'];
-        if (showFolderUpload) tail.push('upload-folder');
-        const itemsWithUpload: (TelegramFile | 'upload' | 'upload-folder')[] = [...sortedFiles, ...tail];
+        const items: GridItem[] = [
+            ...subFolders.map(folder => ({ kind: 'folder' as const, folder })),
+            ...sortedFiles.map(file => ({ kind: 'file' as const, file })),
+        ];
+        const tail: GridItem[] = [{ kind: 'upload' }];
+        if (showFolderUpload) tail.push({ kind: 'upload-folder' });
+        const itemsWithUpload: GridItem[] = [...items, ...tail];
+        const rows: GridItem[][] = [];
         for (let i = 0; i < itemsWithUpload.length; i += columns) {
             rows.push(itemsWithUpload.slice(i, i + columns));
         }
         return rows;
-    }, [sortedFiles, columns, showFolderUpload]);
+    }, [sortedFiles, subFolders, columns, showFolderUpload]);
 
 
     const listItems = useMemo(() => {
@@ -219,7 +236,7 @@ export function FileExplorer({
         return <div className="flex flex-1 items-center justify-center p-3 text-ui text-app-danger">Error loading files</div>;
     }
 
-    if (files.length === 0) {
+    if (files.length === 0 && subFolders.length === 0) {
         return (
             <div className="flex-1 overflow-auto p-3">
                 <EmptyState onUpload={onManualUpload} />
@@ -258,39 +275,64 @@ export function FileExplorer({
                                     }}
                                 >
                                     {row.map((item) => {
-                                        if (item === 'upload') {
+                                        if (item.kind === 'upload') {
                                             return (
                                                 <button
                                                     key="upload"
                                                     onClick={(e) => { e.stopPropagation(); onManualUpload(); }}
                                                     className="quiet-control group flex min-w-0 flex-col items-center justify-center overflow-hidden border border-dashed border-app-border-subtle bg-app-surface/25 text-app-text-secondary hover:border-app-accent/45 hover:bg-app-surface/50 hover:text-app-accent"
-                                                    style={{ height: `${cardHeight}px` }}
+                                                    style={{ aspectRatio: '1/1', width: '100%' }}
                                                 >
                                                     <Plus className="mb-1.5 h-6 w-6" />
                                                     <span className="text-ui font-medium">{t('common.upload_file')}</span>
                                                 </button>
                                             );
                                         }
-                                        if (item === 'upload-folder') {
+                                        if (item.kind === 'upload-folder') {
                                             return (
                                                 <button
                                                     key="upload-folder"
                                                     onClick={(e) => { e.stopPropagation(); onFolderUpload(); }}
                                                     className="quiet-control group flex min-w-0 flex-col items-center justify-center overflow-hidden border border-dashed border-app-border-subtle bg-app-surface/25 text-app-text-secondary hover:border-app-accent/45 hover:bg-app-surface/50 hover:text-app-accent"
-                                                    style={{ height: `${cardHeight}px` }}
+                                                    style={{ aspectRatio: '1/1', width: '100%' }}
                                                 >
                                                     <FolderUp className="mb-1.5 h-6 w-6" />
                                                     <span className="text-ui font-medium">{t('common.upload_folder')}</span>
                                                 </button>
                                             );
                                         }
-                                        const file = item;
+                                        if (item.kind === 'folder') {
+                                            const folder = item.folder;
+                                            return (
+                                                <FileCard
+                                                    key={`folder-${folder.id}`}
+                                                    file={{
+                                                        id: folder.id,
+                                                        name: folder.name,
+                                                        size: 0,
+                                                        sizeStr: '0 B',
+                                                        type: 'folder',
+                                                        created_at: '',
+                                                    }}
+                                                    isSelected={false}
+                                                    onClick={() => onFolderClick?.(folder.id)}
+                                                    onDelete={() => onFolderDelete?.(folder.id, folder.name)}
+                                                    activeFolderId={activeFolderId}
+                                                    height={cardHeight}
+                                                    disableDrag={selectionDisabled}
+                                                />
+                                            );
+                                        }
+                                        const file = item.file;
                                         return (
                                             <FileCard
                                                 key={`${file.folder_id ?? 'home'}:${file.id}`}
                                                 file={file}
                                                 isSelected={selectedIds.includes(file.id)}
-                                                onClick={(e) => onFileClick(e, file, sortedFiles)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePreviewRequest(file);
+                                                }}
                                                 onContextMenu={(e) => handleContextMenu(e, file)}
                                                 onDelete={() => onDelete(file)}
                                                 onDownload={() => onDownload(file)}

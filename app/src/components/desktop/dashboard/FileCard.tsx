@@ -16,7 +16,7 @@ import i18n from '../../../i18n';
 interface FileCardProps {
     file: TelegramFile;
     onDelete: () => void;
-    onDownload: () => void;
+    onDownload?: () => void;
     onPreview?: () => void;
     onShare?: () => void;
     isSelected: boolean;
@@ -124,7 +124,7 @@ export function FileCard({ file, onDelete, onDownload, onPreview, onShare, isSel
                 className={`group relative h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-container border transition-[border-color,background-color,box-shadow]
                 ${isSelected ? 'border-app-accent bg-app-selected ring-1 ring-app-accent' : 'border-transparent bg-app-surface/45 hover:border-app-border hover:bg-app-surface/70'}
                 ${isFileDragOver ? 'bg-app-selected ring-2 ring-app-accent' : ''}`}
-                style={height ? { height: `${height}px` } : { aspectRatio: '4/3' }}
+                style={height ? { height: `${height}px` } : { aspectRatio: '1/1', width: '100%', position: 'relative' }}
             >
                 {/* Thumbnail or Icon */}
                 {thumbnail ? (
@@ -197,9 +197,11 @@ export function FileCard({ file, onDelete, onDownload, onPreview, onShare, isSel
                     <button type="button" aria-label={`Preview ${file.name}`} onClick={(e) => { e.stopPropagation(); if (onPreview) onPreview() }} className="quiet-control file-action-btn flex h-7 w-7 items-center justify-center text-white/80 hover:text-white" title={i18n.t("files.preview")}>
                         <Eye className="h-3.5 w-3.5" />
                     </button>
-                    <button type="button" aria-label={`Download ${file.name}`} onClick={(e) => { e.stopPropagation(); onDownload() }} className="quiet-control file-action-btn flex h-7 w-7 items-center justify-center text-white/80 hover:text-white" title={i18n.t("files.download")}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    </button>
+                    {onDownload && (
+                        <button type="button" aria-label={`Download ${file.name}`} onClick={(e) => { e.stopPropagation(); onDownload() }} className="quiet-control file-action-btn flex h-7 w-7 items-center justify-center text-white/80 hover:text-white" title={i18n.t("files.download")}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        </button>
+                    )}
                     {actions.canShare && onShare && (
                         <button type="button" aria-label={`Share ${file.name}`} onClick={(e) => { e.stopPropagation(); onShare() }} className="quiet-control file-action-btn flex h-7 w-7 items-center justify-center text-white/80 hover:text-white" title={i18n.t("files.share")}>
                             <Link className="h-3.5 w-3.5" />

@@ -940,7 +940,7 @@ impl DavFileSystem for TelegramDavFs {
             }
             let name = validate_portable_name(segments[0])?;
             let client = self.client().await?;
-            create_folder_inner(&name, &client, &self.state.peer_cache)
+            create_folder_inner(&name, None, &client, &self.state.peer_cache)
                 .await
                 .map_err(|_| FsError::GeneralFailure)?;
             self.invalidate("/").await;

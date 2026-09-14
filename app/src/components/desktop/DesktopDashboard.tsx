@@ -86,8 +86,24 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         handleFolderRename, handleFolderToggleVisibility, handleExportFolderInvite,
         handleCreateGroup, handleDeleteGroup, handleUpdateGroup, handleAssignFolderToGroup,
         handleReorderFolders, handleUpdateGroupOrder,
+        handleSwitchProfile, handleDeleteProfile,
         accountId,
     } = useTelegramConnection(onLogout);
+
+    const [profiles, setProfiles] = useState<any[]>([]);
+    const [activeProfile, setActiveProfile] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (store) {
+            const loadProfiles = async () => {
+                const savedProfiles = await store.get<any[]>('profiles') || [];
+                const savedActive = await store.get<string>('active_profile');
+                setProfiles(savedProfiles);
+                setActiveProfile(savedActive || null);
+            };
+            loadProfiles();
+        }
+    }, [store, accountId]);
 
 
     const { settings, updateSetting, updateSettings, isLoaded: settingsLoaded } = useSettings();
@@ -856,6 +872,11 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
                 createFolderRequest={createFolderRequest}
                 activeSmartView={activeSmartView}
                 onSmartViewChange={setActiveSmartView}
+                onSignOut={handleLogout}
+                onSwitchProfile={handleSwitchProfile}
+                onDeleteProfile={handleDeleteProfile}
+                profiles={profiles}
+                activeProfile={activeProfile}
             />
 
             <main className="flex min-w-0 flex-1 flex-col">
@@ -886,6 +907,9 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
                     onNewFolderClick={() => setCreateFolderRequest((value) => value + 1)}
                     onShowShortcuts={() => setShowShortcuts(true)}
                     onShowHelp={() => setShowHelp(true)}
+                    folders={folders}
+                    activeFolderId={activeFolderId}
+                    onGoBack={setActiveFolderId}
                 />
                 {(searchTerm.trim().length > 0 || searchFilters.type !== 'all' || searchFilters.size !== 'any' || searchFilters.date !== 'any') && (
                     <div className="px-3 pb-0 pt-3">
@@ -914,6 +938,8 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
                     onShare={setShareFile}
                     onRename={handleRename}
                     onFileMove={handleFileMove}
+                    onFolderClick={setActiveFolderId}
+                    onFolderDelete={handleFolderDelete}
                     cardScale={cardScale}
                     sortField={sortField}
                     sortDirection={sortDirection}

@@ -973,17 +973,24 @@ pub async fn cmd_delete_android_staged_upload(
 
 pub async fn create_folder_inner(
     name: &str,
+    parent_id: Option<i64>,
     client: &grammers_client::Client,
     peer_cache: &Arc<tokio::sync::RwLock<HashMap<i64, Peer>>>,
 ) -> Result<FolderMetadata, String> {
-    log::info!("Creating Telegram Channel: {}", name);
+    log::info!("Creating Telegram Channel: {} (Parent: {:?})", name, parent_id);
+
+    let about = if let Some(pid) = parent_id {
+        format!("Telegram Drive Storage Folder\n[telegram-drive-folder][parent:{}]", pid)
+    } else {
+        "Telegram Drive Storage Folder\n[telegram-drive-folder]".to_string()
+    };
 
     let result = client
         .invoke(&tl::functions::channels::CreateChannel {
             broadcast: true,
             megagroup: false,
             title: format!("{} [TD]", name),
-            about: "Telegram Drive Storage Folder\n[telegram-drive-folder]".to_string(),
+            about,
             geo_point: None,
             address: None,
             for_import: false,
@@ -1023,7 +1030,7 @@ pub async fn create_folder_inner(
     Ok(FolderMetadata {
         id: chat_id,
         name: name.to_string(),
-        parent_id: None,
+        parent_id,
         username: None,
         is_public: false,
         group_id: None,
@@ -1034,6 +1041,7 @@ pub async fn create_folder_inner(
 #[tauri::command]
 pub async fn cmd_create_folder(
     name: String,
+    parent_id: Option<i64>,
     state: State<'_, TelegramState>,
     db_pool: State<'_, DbConnection>,
 ) -> Result<FolderMetadata, String> {
@@ -1044,11 +1052,11 @@ pub async fn cmd_create_folder(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        log::info!("[MOCK] Created folder '{}' with ID {}", name, mock_id);
+        log::info!("[MOCK] Created folder '{}' with ID {} (parent: {:?})", name, mock_id, parent_id);
         FolderMetadata {
             id: mock_id,
             name,
-            parent_id: None,
+            parent_id,
             username: None,
             is_public: false,
             group_id: None,
@@ -1056,7 +1064,7 @@ pub async fn cmd_create_folder(
         }
     } else {
         let client = client_opt.ok_or_else(|| "Client not connected".to_string())?;
-        create_folder_inner(&name, &client, &state.peer_cache).await?
+        create_folder_inner(&name, parent_id, &client, &state.peer_cache).await?
     };
 
     // Save to SQLite
@@ -4330,7 +4338,7 @@ pub async fn cmd_scan_folders(
     }
     let client = client_opt.ok_or_else(|| "Client not connected".to_string())?;
 
-    let known_folder_ids = crate::db::with_connection(db_pool.inner().clone(), |connection| {
+    let _known_folder_ids = crate::db::with_connection(db_pool.inner().clone(), |connection| {
         let mut statement = connection
             .prepare("SELECT channel_id FROM folder_metadata")
             .map_err(|error| error.to_string())?;
@@ -4368,6 +4376,10 @@ pub async fn cmd_scan_folders(
 
                 // Strategy 1: Title
                 if name.to_lowercase().contains("[td]") {
+                    if c.raw.creator {
+                        legacy_candidates.push((id, access_hash, name, c.raw.username.clone()));
+                        continue;
+                    }
                     log::info!(" -> MATCH via Title: {}", name);
                     let display_name = name
                         .replace(" [TD]", "")
@@ -4390,25 +4402,8 @@ pub async fn cmd_scan_folders(
                     continue;
                 }
 
-                // A channel already verified and persisted by a previous scan
-                // does not need another GetFullChannel network round trip just
-                // because it uses the legacy About marker.
-                if known_folder_ids.contains(&id) {
-                    let username = c.raw.username.clone();
-                    folders.push(FolderMetadata {
-                        id,
-                        name,
-                        parent_id: None,
-                        is_public: username.is_some(),
-                        username,
-                        group_id: None,
-                        display_order: 0,
-                    });
-                    continue;
-                }
-
-                // Strategy 2: About. Unknown legacy candidates are checked in
-                // a small bounded batch after dialog enumeration.
+                // Strategy 2: About. Unknown or creator candidates are checked in
+                // a bounded batch after dialog enumeration to parse hierarchy.
                 if c.raw.creator {
                     legacy_candidates.push((id, access_hash, name, c.raw.username.clone()));
                 }
@@ -4441,13 +4436,31 @@ pub async fn cmd_scan_folders(
                             full.full_chat,
                             tl::enums::ChatFull::Full(ref details)
                                 if details.about.contains("[telegram-drive-folder]")
-                        );
+                        ) || name.to_lowercase().contains("[td]");
                         if is_drive_folder {
-                            log::info!(" -> MATCH via About: {}", name);
+                            let mut parent_id = None;
+                            if let tl::enums::ChatFull::Full(ref details) = full.full_chat {
+                                if let Some(start) = details.about.find("[parent:") {
+                                    let sub = &details.about[start + 8..];
+                                    if let Some(end) = sub.find(']') {
+                                        if let Ok(pid) = sub[..end].parse::<i64>() {
+                                            parent_id = Some(pid);
+                                        }
+                                    }
+                                }
+                            }
+                            let display_name = name
+                                .replace(" [TD]", "")
+                                .replace(" [td]", "")
+                                .replace("[TD]", "")
+                                .replace("[td]", "")
+                                .trim()
+                                .to_string();
+                            log::info!(" -> MATCH: {} (Parent: {:?})", display_name, parent_id);
                             Some(FolderMetadata {
                                 id,
-                                name,
-                                parent_id: None,
+                                name: display_name,
+                                parent_id,
                                 is_public: username.is_some(),
                                 username,
                                 group_id: None,

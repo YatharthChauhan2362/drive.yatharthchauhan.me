@@ -30,6 +30,7 @@ pub struct TelegramState {
     pub phone_login: Arc<Mutex<Option<PhoneLoginState>>>,
     pub password_token: Arc<Mutex<Option<PasswordToken>>>,
     pub api_id: Arc<Mutex<Option<i32>>>,
+    pub current_profile: Arc<Mutex<Option<String>>>,
     pub auth_attempt_counter: Arc<std::sync::atomic::AtomicU64>,
     /// Send to this channel to request runner shutdown.
     /// Uses std::sync::Mutex (not tokio) so it can be locked from synchronous

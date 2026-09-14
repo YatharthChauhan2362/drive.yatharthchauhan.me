@@ -212,10 +212,14 @@ export function useTelegramConnection(onLogoutParent: () => void) {
     // Keep the ref in sync
     handleSyncFoldersRef.current = handleSyncFolders;
 
-    const handleCreateFolder = async (name: string) => {
+    const handleCreateFolder = async (name: string, parentId?: number | null) => {
         if (!store) return;
         try {
-            const newFolder = await invoke<TelegramFolder>('cmd_create_folder', { name });
+            const targetParentId = parentId !== undefined ? parentId : activeFolderId;
+            const newFolder = await invoke<TelegramFolder>('cmd_create_folder', { 
+                name,
+                parentId: targetParentId 
+            });
             const updated = [...folders, newFolder];
             setFolders(updated);
             await store.set('folders', updated);
@@ -410,6 +414,71 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         }
     };
 
+    const handleSwitchProfile = async (profileName: string) => {
+        if (!store) return;
+        setIsSyncing(true);
+        try {
+            const profiles = await store.get<any[]>('profiles') || [];
+            const profile = profiles.find(p => p.name === profileName);
+            if (!profile) throw new Error("Profile not found");
+
+            // 1. Connect to new profile
+            await invoke('cmd_connect', { apiId: parseInt(profile.apiId, 10), profile: profileName });
+            
+            // 2. Update store
+            await store.set('active_profile', profileName);
+            await store.set('api_id', profile.apiId);
+            await store.set('api_hash', profile.apiHash);
+            
+            // Clear current folders to force refresh for new account
+            setFolders([]);
+            await store.set('folders', []);
+            await store.save();
+            
+            // 3. Reset state
+            setActiveFolderId(null);
+            queryClient.clear();
+            
+            toast.success(`Switched to profile: ${profileName}`);
+            
+            // 4. Check connection and trigger initial sync
+            const connected = await invoke<boolean>("cmd_check_connection");
+            setIsConnected(connected);
+            if (connected) {
+                handleSyncFolders();
+            }
+        } catch (e) {
+            toast.error("Failed to switch profile: " + e);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleDeleteProfile = async (profileName: string) => {
+        if (!store) return;
+        try {
+            const profiles = await store.get<any[]>('profiles') || [];
+            const updatedProfiles = profiles.filter(p => p.name !== profileName);
+            await store.set('profiles', updatedProfiles);
+            
+            const active = await store.get<string>('active_profile');
+            if (active === profileName) {
+                if (updatedProfiles.length > 0) {
+                    await handleSwitchProfile(updatedProfiles[0].name);
+                } else {
+                    await store.set('active_profile', null);
+                    await store.save();
+                    handleLogout();
+                }
+            } else {
+                await store.save();
+                toast.success(`Deleted profile: ${profileName}`);
+            }
+        } catch (e) {
+            toast.error("Failed to delete profile: " + e);
+        }
+    };
+
     return {
         store,
         accountId,
@@ -426,6 +495,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         handleFolderRename,
         handleFolderToggleVisibility,
         handleExportFolderInvite,
+        handleSwitchProfile,
+        handleDeleteProfile,
         // Group Actions
         handleCreateGroup,
         handleDeleteGroup,

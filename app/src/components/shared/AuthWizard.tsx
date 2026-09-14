@@ -62,6 +62,7 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
 
     const [apiId, setApiId] = useState("");
     const [apiHash, setApiHash] = useState("");
+    const [profileName, setProfileName] = useState("");
 
     const [phone, setPhone] = useState("");
     const [code, setCode] = useState("");
@@ -145,6 +146,8 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
                     setApiId(savedId);
                     setApiHash(savedHash);
                 }
+                const savedProfile = await store.get<string>('active_profile');
+                if (savedProfile) setProfileName(savedProfile);
             } catch {
                 // config not found, starting fresh
             }
@@ -156,6 +159,14 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
         await invoke('cmd_store_api_hash', { apiHash });
         const store = await load('config.json');
         await store.set('api_id', apiId);
+        if (profileName.trim()) {
+            await store.set('active_profile', profileName.trim());
+            const profiles = await store.get<any[]>('profiles') || [];
+            if (!profiles.find((p: any) => p.name === profileName.trim())) {
+                profiles.push({ name: profileName.trim(), apiId, apiHash });
+                await store.set('profiles', profiles);
+            }
+        }
         await store.delete('api_hash');
         await store.save();
     };
@@ -195,7 +206,8 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
 
             const url = await invoke<string>("cmd_auth_qr_login", {
                 apiId: idInt,
-                apiHash: apiHash
+                apiHash: apiHash,
+                profile: profileName.trim() || null,
             });
 
             if (url === "__authorized__") {
@@ -278,7 +290,8 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
             const codeRequest = await invoke<CodeRequestResult>("cmd_auth_request_code", {
                 phone,
                 apiId: idInt,
-                apiHash: apiHash
+                apiHash: apiHash,
+                profile: profileName.trim() || null,
             });
             applyCodeRequestResult(codeRequest);
         } catch (err: unknown) {
@@ -446,9 +459,11 @@ export function AuthWizard({ onLogin }: { onLogin: () => void }) {
                                 <AuthSetupStep
                                     apiId={apiId}
                                     apiHash={apiHash}
+                                    profileName={profileName}
                                     isMobile={isMobile}
                                     onApiIdChange={setApiId}
                                     onApiHashChange={setApiHash}
+                                    onProfileNameChange={setProfileName}
                                     onSubmit={handleSetupSubmit}
                                     onShowHelp={() => setShowHelp(true)}
                                     onDevLogin={onLogin}

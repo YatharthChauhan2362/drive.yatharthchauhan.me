@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { HardDrive, Folder, Plus, RefreshCw, LogOut, ChevronLeft, ChevronRight, Settings2, Trash2, Check, X, Eye, EyeOff, Clock3, Star, Pin, FileWarning, CalendarClock, Copy, Database } from 'lucide-react';
+import { HardDrive, Folder, Plus, RefreshCw, LogOut, ChevronLeft, ChevronRight, Settings2, Trash2, Check, X, Eye, EyeOff, Clock3, Star, Pin, FileWarning, CalendarClock, Copy, Database, User, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SidebarItem } from './SidebarItem';
 import { BandwidthWidget } from './BandwidthWidget';
@@ -115,16 +115,34 @@ interface SidebarProps {
     createFolderRequest?: number;
     activeSmartView?: SmartView | null;
     onSmartViewChange?: (view: SmartView | null) => void;
+    onSignOut?: () => void;
+    onSwitchProfile?: (profileName: string) => Promise<void>;
+    onDeleteProfile?: (profileName: string) => Promise<void>;
+    profiles?: any[];
+    activeProfile?: string | null;
 }
 
 export function Sidebar({
     folders, groups = [], activeFolderId, setActiveFolderId, onDelete, onRename, onToggleVisibility, onExportInvite, onCreate,
     isSyncing, isConnected, onSync, onLogout, bandwidth,
-    onAssignFolderToGroup, onCreateGroup, onUpdateGroup, onDeleteGroup, createFolderRequest = 0, activeSmartView = null, onSmartViewChange
+    onAssignFolderToGroup, onCreateGroup, onUpdateGroup, onDeleteGroup, createFolderRequest = 0, activeSmartView = null, onSmartViewChange,
+    onSignOut, onSwitchProfile, onDeleteProfile, profiles = [], activeProfile = null
 }: SidebarProps) {
+    const handleLogoutAction = onSignOut || onLogout;
     const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+    const [showProfileSelector, setShowProfileSelector] = useState(false);
+    const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
     const { t } = useTranslation();
     const { settings, updateSetting } = useSettings();
+
+    const toggleFolderExpand = (folderId: number) => {
+        setExpandedFolders(prev => {
+            const next = new Set(prev);
+            if (next.has(folderId)) next.delete(folderId);
+            else next.add(folderId);
+            return next;
+        });
+    };
 
     // Grouping States
     const [activeGroupId, setActiveGroupId] = useState<number | null | 'all'>('all');
@@ -166,6 +184,43 @@ export function Sidebar({
         if (activeGroupId === null) return folder.group_id === null || folder.group_id === undefined;
         return folder.group_id === activeGroupId;
     });
+
+    const renderFolderItem = (folder: TelegramFolder, level: number = 0): React.ReactNode => {
+        const children = filteredFolders.filter(f => f.parent_id === folder.id);
+        const hasChildren = children.length > 0;
+        const isExpanded = expandedFolders.has(folder.id);
+
+        return (
+            <div key={folder.id} className="flex flex-col">
+                <SidebarItem
+                    icon={Folder}
+                    label={folder.name}
+                    active={activeFolderId === folder.id && !activeSmartView}
+                    onClick={() => { onSmartViewChange?.(null); setActiveFolderId(folder.id); }}
+                    onDelete={() => onDelete(folder.id, folder.name)}
+                    onRename={() => onRename(folder.id, folder.name)}
+                    onToggleVisibility={() => onToggleVisibility(folder.id, folder.name, !!(folder.is_public || folder.username))}
+                    onExportInvite={() => onExportInvite(folder.id, folder.name)}
+                    folderId={folder.id}
+                    isPublic={!!(folder.is_public || folder.username)}
+                    collapsed={settings.sidebarCollapsed}
+                    groups={groups}
+                    onAssignFolderToGroup={onAssignFolderToGroup}
+                    level={level}
+                    hasChildren={hasChildren}
+                    isExpanded={isExpanded}
+                    onToggleExpand={() => toggleFolderExpand(folder.id)}
+                />
+                {hasChildren && isExpanded && !settings.sidebarCollapsed && (
+                    <div className="flex flex-col">
+                        {children.map(child => renderFolderItem(child, level + 1))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const rootFolders = filteredFolders.filter(f => !f.parent_id);
 
     return (
         <aside 
@@ -389,27 +444,10 @@ export function Sidebar({
                         collapsed={settings.sidebarCollapsed}
                     />
                     <SortableContext
-                        items={filteredFolders.map(folder => `folder-${folder.id}`)}
+                        items={rootFolders.map(folder => `folder-${folder.id}`)}
                         strategy={verticalListSortingStrategy}
                     >
-                        {filteredFolders.map(folder => (
-                            <SidebarItem
-                                key={folder.id}
-                                icon={Folder}
-                                label={folder.name}
-                                active={activeFolderId === folder.id && !activeSmartView}
-                                onClick={() => { onSmartViewChange?.(null); setActiveFolderId(folder.id); }}
-                                onDelete={() => onDelete(folder.id, folder.name)}
-                                onRename={() => onRename(folder.id, folder.name)}
-                                onToggleVisibility={() => onToggleVisibility(folder.id, folder.name, !!(folder.is_public || folder.username))}
-                                onExportInvite={() => onExportInvite(folder.id, folder.name)}
-                                folderId={folder.id}
-                                isPublic={!!(folder.is_public || folder.username)}
-                                collapsed={settings.sidebarCollapsed}
-                                groups={groups}
-                                onAssignFolderToGroup={onAssignFolderToGroup}
-                            />
-                        ))}
+                        {rootFolders.map(folder => renderFolderItem(folder, 0))}
                     </SortableContext>
                 </nav>
             {/* Sticky Create Folder section — always visible above the footer */}
@@ -430,6 +468,80 @@ export function Sidebar({
             )}
 
             <div className={`flex flex-col border-t border-app-border-subtle p-2 ${settings.sidebarCollapsed ? 'items-center gap-2' : 'gap-2'}`}>
+                {/* Profile Switcher (Bottom) */}
+                {!settings.sidebarCollapsed && profiles && profiles.length > 0 && (
+                    <div className="relative w-full">
+                        <button
+                            type="button"
+                            onClick={() => setShowProfileSelector(!showProfileSelector)}
+                            className="quiet-control flex w-full items-center justify-between border border-app-border-subtle bg-app-surface px-2.5 py-1.5 hover:bg-app-hover"
+                        >
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-app-accent/15 text-app-accent">
+                                    <User className="h-3.5 w-3.5" />
+                                </div>
+                                <div className="flex flex-col items-start overflow-hidden text-left">
+                                    <span className="truncate text-badge font-semibold text-app-text">
+                                        {activeProfile || "Default Account"}
+                                    </span>
+                                    <span className="text-[10px] text-app-text-tertiary">{t('common.switch_account') || "Switch Account"}</span>
+                                </div>
+                            </div>
+                            <ChevronDown className={`h-3.5 w-3.5 text-app-text-tertiary transition-transform ${showProfileSelector ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showProfileSelector && (
+                            <div className="absolute bottom-full left-0 mb-1.5 w-full overflow-hidden rounded-lg border border-app-border bg-app-surface shadow-lg z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                                <div className="max-h-48 overflow-y-auto p-1">
+                                    <div className="border-b border-app-border-subtle px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-app-text-tertiary">
+                                        {t('common.accounts') || "Accounts"}
+                                    </div>
+                                    {profiles.map((p: any) => (
+                                        <div key={p.name} className="group/item flex items-center gap-1 px-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    onSwitchProfile?.(p.name);
+                                                    setShowProfileSelector(false);
+                                                }}
+                                                className={`flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-ui text-left transition-colors ${activeProfile === p.name ? 'bg-app-accent/15 font-medium text-app-accent' : 'text-app-text-secondary hover:bg-app-hover hover:text-app-text'}`}
+                                            >
+                                                <div className={`h-1.5 w-1.5 rounded-full ${activeProfile === p.name ? 'bg-app-accent' : 'bg-transparent'}`} />
+                                                <span className="truncate">{p.name}</span>
+                                            </button>
+                                            {onDeleteProfile && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteProfile(p.name);
+                                                    }}
+                                                    className="opacity-0 group-hover/item:opacity-100 p-1 text-app-text-tertiary hover:text-app-danger transition-opacity rounded"
+                                                    title="Delete Profile"
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="border-t border-app-border-subtle p-1 bg-app-sidebar">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            handleLogoutAction();
+                                            setShowProfileSelector(false);
+                                        }}
+                                        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-badge font-medium text-app-text hover:bg-app-accent hover:text-app-accent-contrast transition-colors"
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        {t('common.add_account') || "Add New Account"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
                 <SyncStatusBadge collapsed={settings.sidebarCollapsed} />
                 {settings.sidebarCollapsed ? (
                     <>
@@ -446,7 +558,7 @@ export function Sidebar({
                             <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                         </button>
                         <button
-                            onClick={onLogout}
+                            onClick={handleLogoutAction}
                             className="quiet-control sidebar-logout-action p-2 text-app-danger"
                             title={t('common.logout')}
                         >
@@ -471,7 +583,7 @@ export function Sidebar({
                                 {isSyncing ? t('common.syncing') : t('common.sync')}
                             </button>
                             <button
-                                onClick={onLogout}
+                                onClick={handleLogoutAction}
                                 className="quiet-control sidebar-logout-action flex h-[30px] flex-1 items-center justify-center gap-1.5 px-2.5 text-badge font-medium text-app-danger"
                                 title="Sign Out"
                             >

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { MoreVertical, Globe, Pencil, Trash2, EyeOff, Eye, Link } from 'lucide-react';
+import { MoreVertical, Globe, Pencil, Trash2, EyeOff, Eye, Link, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -21,6 +21,10 @@ interface SidebarItemProps {
     collapsed?: boolean;
     groups?: FolderGroup[];
     onAssignFolderToGroup?: (folderId: number, groupId: number | null) => void;
+    level?: number;
+    hasChildren?: boolean;
+    isExpanded?: boolean;
+    onToggleExpand?: () => void;
 }
 
 /**
@@ -28,7 +32,7 @@ interface SidebarItemProps {
  */
 export function SidebarItem({
     icon: Icon, label, active = false, onClick, onDelete, folderId, isPublic, onRename, onToggleVisibility, onExportInvite, collapsed = false,
-    groups = [], onAssignFolderToGroup
+    groups = [], onAssignFolderToGroup, level = 0, hasChildren = false, isExpanded = false, onToggleExpand
 }: SidebarItemProps) {
     const { t } = useTranslation();
 
@@ -70,19 +74,36 @@ export function SidebarItem({
     return (
         <div
             ref={setNodeRef}
-            style={style}
+            style={{
+                ...style,
+                paddingLeft: collapsed ? undefined : `${(level || 0) * 14 + 10}px`
+            }}
             {...attributes}
             {...listeners}
             onClick={onClick}
             title={collapsed ? label : undefined}
             onContextMenu={openFromContextMenu}
-            className={`quiet-control group flex h-8 w-full cursor-pointer select-none items-center text-ui ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'} ${active
+            className={`quiet-control group flex h-8 w-full cursor-pointer select-none items-center text-ui ${collapsed ? 'justify-center px-0' : 'gap-2 px-2.5'} ${active
                 ? 'bg-app-selected font-medium text-app-text'
                 : isFileDragOver
                     ? 'bg-app-selected text-app-text ring-2 ring-app-accent'
                     : 'text-app-text-secondary hover:text-app-text'
                 }`}
         >
+            {hasChildren && !collapsed ? (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleExpand?.();
+                    }}
+                    className="p-0.5 text-app-text-tertiary hover:text-app-text rounded transition-colors"
+                >
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                </button>
+            ) : (!collapsed && level && level > 0 ? (
+                <span className="w-3.5 h-3.5 flex-shrink-0" />
+            ) : null)}
             <Icon className={`h-4 w-4 flex-shrink-0 ${active || isFileDragOver ? 'text-app-accent' : ''}`} />
             {!collapsed && <span className="flex-1 truncate text-start">{label}</span>}
             {isFileDragOver && dragCount > 1 && (

@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, ExternalLink, HelpCircle, Key, Lock, Phone, QrCode } from 'lucide-react';
+import { ArrowRight, ExternalLink, HelpCircle, Key, Lock, Phone, QrCode, User } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../../i18n';
@@ -34,9 +34,11 @@ export interface CodeRequestResult {
 interface AuthSetupStepProps {
   apiId: string;
   apiHash: string;
+  profileName?: string;
   isMobile: boolean;
   onApiIdChange: (value: string) => void;
   onApiHashChange: (value: string) => void;
+  onProfileNameChange?: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
   onShowHelp: () => void;
   onDevLogin: () => void;
@@ -45,9 +47,11 @@ interface AuthSetupStepProps {
 export function AuthSetupStep({
   apiId,
   apiHash,
+  profileName,
   isMobile,
   onApiIdChange,
   onApiHashChange,
+  onProfileNameChange,
   onSubmit,
   onShowHelp,
   onDevLogin,
@@ -61,6 +65,15 @@ export function AuthSetupStep({
       </div>
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-app-text-tertiary"><span className="h-px flex-1 bg-app-border-subtle" />Advanced client credentials<span className="h-px flex-1 bg-app-border-subtle" /></div>
       <div className="space-y-3">
+        {onProfileNameChange && (
+          <div>
+            <label htmlFor="telegram-profile-name" className="auth-label">Profile Name (Optional)</label>
+            <div className="relative">
+              <User className="auth-input-icon" />
+              <input type="text" id="telegram-profile-name" value={profileName || ''} onChange={event => onProfileNameChange(event.target.value)} placeholder="e.g. Personal / Work" className="auth-input" />
+            </div>
+          </div>
+        )}
         <div>
           <label htmlFor="telegram-api-id" className="auth-label">{i18n.t("auth.api_id")}</label>
           <div className="relative">

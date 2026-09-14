@@ -137,9 +137,14 @@ pub async fn ensure_client_initialized(
             .map_err(|e| format!("Failed to create app data dir: {}", e))?;
     }
 
-    let session_path = app_data_dir.join("telegram.session");
+    let profile_name = state.current_profile.lock().await.clone();
+    let session_filename = match &profile_name {
+        Some(p) => format!("telegram_{}.session", p.replace(|c: char| !c.is_alphanumeric(), "_")),
+        None => "telegram.session".to_string(),
+    };
+    let session_path = app_data_dir.join(&session_filename);
     let session_path_str = session_path.to_string_lossy().to_string();
-    log::info!("Opening the local Telegram session database");
+    log::info!("Opening the local Telegram session database at {} (profile: {:?})", session_path_str, profile_name);
 
     let mut session_open_result = SqliteSession::open(&session_path_str);
 
@@ -234,10 +239,19 @@ pub async fn cmd_connect(
     app_handle: tauri::AppHandle,
     state: State<'_, TelegramState>,
     api_id: i32,
+    profile: Option<String>,
 ) -> Result<bool, String> {
     crate::workspace::resume();
-    // Store API ID for auto-reconnect
+    // 1. Force shutdown existing client
+    {
+        let mut client_guard = state.client.lock().await;
+        *client_guard = None;
+    }
+    // Store API ID and Profile for auto-reconnect
     *state.api_id.lock().await = Some(api_id);
+    if profile.is_some() {
+        *state.current_profile.lock().await = profile;
+    }
     ensure_client_initialized(&app_handle, &state, api_id).await?;
     Ok(true)
 }
@@ -355,11 +369,13 @@ pub async fn cmd_logout(
     }
 
     // 3. Clear State
+    let profile_name = state.current_profile.lock().await.clone();
     *state.client.lock().await = None;
     state.auth_attempt_counter.fetch_add(1, Ordering::SeqCst);
     *state.phone_login.lock().await = None;
     *state.password_token.lock().await = None;
     *state.api_id.lock().await = None;
+    *state.current_profile.lock().await = None;
     *state.session.lock().await = None;
     crate::commands::utils::clear_peer_cache(&state.peer_cache).await;
     state.active_file_loads.write().await.clear();
@@ -370,10 +386,14 @@ pub async fn cmd_logout(
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?;
-    let session_path = app_data_dir.join("telegram.session");
-    let _ = std::fs::remove_file(session_path);
-    let _ = std::fs::remove_file(app_data_dir.join("telegram.session-wal"));
-    let _ = std::fs::remove_file(app_data_dir.join("telegram.session-shm"));
+    let session_filename = match &profile_name {
+        Some(p) => format!("telegram_{}.session", p.replace(|c: char| !c.is_alphanumeric(), "_")),
+        None => "telegram.session".to_string(),
+    };
+    let session_path = app_data_dir.join(&session_filename);
+    let _ = std::fs::remove_file(&session_path);
+    let _ = std::fs::remove_file(app_data_dir.join(format!("{}-wal", session_filename)));
+    let _ = std::fs::remove_file(app_data_dir.join(format!("{}-shm", session_filename)));
 
     log::info!(
         "Logout complete. Vault locked. Runner count: {}",
@@ -732,6 +752,7 @@ pub async fn cmd_auth_request_code(
     phone: String,
     api_id: i32,
     api_hash: String,
+    profile: Option<String>,
     state: State<'_, TelegramState>,
 ) -> Result<AuthCodeRequestResult, String> {
     if api_hash.trim().is_empty() {
@@ -743,8 +764,15 @@ pub async fn cmd_auth_request_code(
     *state.phone_login.lock().await = None;
     *state.password_token.lock().await = None;
 
-    // Store API ID
+    // 1. Force shutdown existing client
+    {
+        let mut client_guard = state.client.lock().await;
+        *client_guard = None;
+    }
+
+    // 2. Store API ID and Profile
     *state.api_id.lock().await = Some(api_id);
+    *state.current_profile.lock().await = profile;
 
     let client_handle = ensure_client_initialized(&app_handle, &state, api_id).await?;
 
@@ -967,10 +995,15 @@ pub async fn cmd_auth_qr_login(
     app_handle: tauri::AppHandle,
     api_id: i32,
     api_hash: String,
+    profile: Option<String>,
     state: State<'_, TelegramState>,
 ) -> Result<String, String> {
     if api_hash.trim().is_empty() {
         return Err("API Hash cannot be empty.".to_string());
+    }
+
+    if let Some(p) = profile {
+        *state.current_profile.lock().await = if p.trim().is_empty() { None } else { Some(p) };
     }
 
     // Store API ID

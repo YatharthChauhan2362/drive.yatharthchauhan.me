@@ -27,10 +27,13 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../context/ThemeContext';
 import { useSettings } from '../../../context/SettingsContext';
 import { Button, IconButton, MenuItem, MenuPanel, SearchField } from '../../ui';
+import { useMemo } from 'react';
 import type { SortDirection, SortField } from './FileExplorer';
 import type { FileSearchFilters } from '../../../services/fileSearch';
 import { useTopBarController } from './useTopBarController';
 import i18n from '../../../i18n';
+import { useZoom } from '../../../context/ZoomContext';
+import { TelegramFolder } from '../../../types';
 
 interface TopBarProps {
     currentFolderName: string;
@@ -58,6 +61,9 @@ interface TopBarProps {
     onShowHelp: () => void;
     searchFilters: FileSearchFilters;
     onSearchFiltersChange: (filters: FileSearchFilters) => void;
+    folders?: TelegramFolder[];
+    activeFolderId?: number | null;
+    onGoBack?: (folderId: number | null) => void;
 }
 
 export function TopBar({
@@ -86,7 +92,11 @@ export function TopBar({
     onShowHelp,
     searchFilters,
     onSearchFiltersChange,
+    folders,
+    activeFolderId,
+    onGoBack,
 }: TopBarProps) {
+    const { zoom, zoomIn, zoomOut, resetZoom } = useZoom();
     const { theme, toggleTheme } = useTheme();
     const { t } = useTranslation();
     const { settings } = useSettings();
@@ -105,21 +115,44 @@ export function TopBar({
     } = useTopBarController(settings.proxyEnabled, settings.proxyLiveStateEnabled);
     const hasSelection = selectedIds.length > 0;
 
+    const breadcrumbs = useMemo(() => {
+        if (!activeFolderId || !folders) {
+            return [{ id: null, name: currentFolderName || t('common.all_files') || 'Files' }];
+        }
+        const crumbs: { id: number | null; name: string }[] = [];
+        let curId: number | null = activeFolderId;
+        const visited = new Set<number>();
+        while (curId !== null && !visited.has(curId)) {
+            visited.add(curId);
+            const folder = folders.find(f => f.id === curId);
+            if (folder) {
+                crumbs.unshift({ id: folder.id, name: folder.name });
+                curId = folder.parent_id !== undefined && folder.parent_id !== null ? folder.parent_id : null;
+            } else {
+                break;
+            }
+        }
+        crumbs.unshift({ id: null, name: t('common.all_files') || 'Files' });
+        return crumbs;
+    }, [folders, activeFolderId, currentFolderName, t]);
+
     return (
         <header
-            className="desktop-chrome-row quiet-toolbar sticky top-0 z-20 gap-2.5"
+            role="banner"
+            className="desktop-chrome-row quiet-toolbar sticky top-0 z-20 gap-2.5 flex h-12 w-full shrink-0 items-center justify-between border-b border-app-border-subtle bg-app-surface-raised/40 px-3 backdrop-blur-md"
             onClick={(event) => event.stopPropagation()}
         >
             {hasSelection ? (
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <IconButton label={t('files.clear_selection')} onClick={onClearSelection}>
-                        <X className="h-4 w-4" />
-                    </IconButton>
-                    <span className="me-1 min-w-0 truncate text-ui font-medium text-app-text">
-                        {t('files.items_selected', { count: selectedIds.length })}
+                <div className="flex flex-1 items-center gap-2">
+                    <span className="text-ui font-medium text-app-text-secondary">
+                        {t('files.selected', { count: selectedIds.length })}
                     </span>
+                    <Button size="sm" variant="ghost" onClick={onClearSelection} leadingIcon={<X className="h-3.5 w-3.5" />}>
+                        {t('common.cancel')}
+                    </Button>
+                    <div className="mx-1 h-4 w-px bg-app-border-subtle" />
                     <Button size="sm" onClick={onShowMoveModal} leadingIcon={<FolderInput className="h-3.5 w-3.5" />}>
-                        {t('files.move_to')}
+                        {t('files.move')}
                     </Button>
                     <Button size="sm" onClick={onBulkDownload} leadingIcon={<Download className="h-3.5 w-3.5" />}>
                         {t('files.download')}
@@ -133,10 +166,19 @@ export function TopBar({
                 </div>
             ) : (
                 <>
-                    <div className="min-w-[8rem] flex-1">
-                        <h1 className="truncate text-app-title font-semibold tracking-[-0.01em] text-app-text" title={currentFolderName}>
-                            {currentFolderName}
-                        </h1>
+                    <div className="min-w-[8rem] flex-1 flex items-center gap-1.5 text-app-title font-semibold tracking-[-0.01em] text-app-text overflow-hidden">
+                        {breadcrumbs.map((crumb, idx) => (
+                            <div key={crumb.id || 'root'} className="flex items-center">
+                                <span
+                                    onClick={() => onGoBack?.(crumb.id)}
+                                    className={`truncate max-w-[12rem] transition-colors ${onGoBack ? 'cursor-pointer hover:text-app-accent' : ''} ${idx === breadcrumbs.length - 1 ? 'text-app-text font-semibold' : 'text-app-text-secondary font-normal'}`}
+                                    title={crumb.name}
+                                >
+                                    {crumb.name}
+                                </span>
+                                {idx < breadcrumbs.length - 1 && <span className="mx-1 text-app-text-tertiary">/</span>}
+                            </div>
+                        ))}
                     </div>
 
                     <div ref={filterRef} className="relative flex w-full max-w-[25rem] items-center gap-1">
@@ -291,6 +333,30 @@ export function TopBar({
                                     )}
                                 </MenuPanel>
                             )}
+                        </div>
+
+                        <div className="flex items-center gap-0.5 rounded-lg border border-app-border bg-app-surface-sunken/40 p-0.5">
+                            <IconButton
+                                label="Zoom Out"
+                                onClick={zoomOut}
+                                size="xs"
+                            >
+                                <ZoomOut className="h-3.5 w-3.5" />
+                            </IconButton>
+                            <button
+                                onClick={resetZoom}
+                                className="px-1 text-[10px] font-bold text-app-text-secondary hover:text-app-accent transition min-w-[2.2rem] justify-center"
+                                title="Reset Zoom"
+                            >
+                                {Math.round(zoom * 100)}%
+                            </button>
+                            <IconButton
+                                label="Zoom In"
+                                onClick={zoomIn}
+                                size="xs"
+                            >
+                                <ZoomIn className="h-3.5 w-3.5" />
+                            </IconButton>
                         </div>
 
                         <div className="relative" ref={moreRef}>

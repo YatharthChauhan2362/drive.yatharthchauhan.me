@@ -1069,6 +1069,7 @@ pub fn run() {
                 phone_login: Arc::new(Mutex::new(None)),
                 password_token: Arc::new(Mutex::new(None)),
                 api_id: Arc::new(Mutex::new(None)),
+                current_profile: Arc::new(Mutex::new(None)),
                 auth_attempt_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 runner_shutdown: Arc::new(std::sync::Mutex::new(None)),
                 runner_count: Arc::new(std::sync::atomic::AtomicU32::new(0)),

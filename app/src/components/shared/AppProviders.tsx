@@ -9,6 +9,8 @@ import { UploadChoiceProvider } from '../../context/UploadChoiceContext';
 import { EncryptionProvider } from '../../hooks/useEncryption';
 import { ErrorBoundary } from './ErrorBoundary';
 
+import { ZoomProvider } from '../../context/ZoomContext';
+
 interface AppProvidersProps {
   children: ReactNode;
 }
@@ -35,19 +37,21 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <ConfirmProvider>
-            <SettingsProvider>
-              <SupporterProvider>
-                <SyncProvider>
-                  <UploadChoiceProvider>
-                    <EncryptionProvider>{children}</EncryptionProvider>
-                  </UploadChoiceProvider>
-                </SyncProvider>
-              </SupporterProvider>
-            </SettingsProvider>
-          </ConfirmProvider>
-        </QueryClientProvider>
+        <ZoomProvider>
+          <QueryClientProvider client={queryClient}>
+            <ConfirmProvider>
+              <SettingsProvider>
+                <SupporterProvider>
+                  <SyncProvider>
+                    <UploadChoiceProvider>
+                      <EncryptionProvider>{children}</EncryptionProvider>
+                    </UploadChoiceProvider>
+                  </SyncProvider>
+                </SupporterProvider>
+              </SettingsProvider>
+            </ConfirmProvider>
+          </QueryClientProvider>
+        </ZoomProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
